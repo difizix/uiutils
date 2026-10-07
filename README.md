@@ -11,7 +11,12 @@ Small GUI helpers, framework-free at the core:
 * `uiutils.makefile_targets`: parse a Makefile into targets (with their doc comments and recipes) and `?=` variables.
 * `uiutils.argparse_form`: get an `argparse` parser from a script without running it, turn it into form fields, and turn
   form values back into an argv.
-* `uiutils.streamlit`: Streamlit widgets built on the above (needs `pip install uiutils[streamlit]`).
+* `uiutils.textfilter`: regex filtering and wrap-around neighbours for list pickers.
+* `uiutils.mdrender`: markdown preprocessing for a viewer: inline images, in-app links, mermaid blocks.
+* `uiutils.streamlit` (needs `pip install uiutils[streamlit]`): a lazy page factory for `st.navigation`, a filtered
+  picker, argparse forms, a process console, and ready-made Make and Scripts pages.
+
+The core has no dependencies; `streamlit` is the only optional one.
 
 
 Installing from pypi
