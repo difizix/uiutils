@@ -1,4 +1,4 @@
-from uiutils.textfilter import cycle_neighbors, filter_by_search_query
+from uiutils.textfilter import cycle_neighbors, filter_by_search_query, filter_lines
 
 
 def test_filter_by_search_query_ands_terms():
@@ -19,3 +19,9 @@ def test_cycle_neighbors_wraps_and_handles_stale_selection():
     assert cycle_neighbors(items, "c") == ("b", "a")   # wraps forwards
     assert cycle_neighbors(items, "zz") == ("a", "a")  # stale selection resets
     assert cycle_neighbors([], "a") == (None, None)
+
+
+def test_filter_lines_keeps_all_terms_and_drops_any_removed():
+    text = "Epoch 1 loss 0.5\nepoch 2 LOSS nan\nwarning: slow\n"
+    assert filter_lines(text, "", "") == text.splitlines()
+    assert filter_lines(text, "epoch loss", "nan") == ["Epoch 1 loss 0.5"]

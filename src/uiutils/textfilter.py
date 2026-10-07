@@ -1,4 +1,4 @@
-"""List helpers behind the GUI file pickers: regex filtering and wrap-around neighbours.
+"""Text helpers behind the GUI file pickers and viewers: regex filtering, wrap-around neighbours, line filters.
 
 Free of streamlit, so the filtering rules are testable and every picker filters the same way.
 """
@@ -39,3 +39,14 @@ def cycle_neighbors(items: list, current) -> tuple:
     except ValueError:
         return items[0], items[0]
     return items[(idx - 1) % len(items)], items[(idx + 1) % len(items)]
+
+
+def filter_lines(text: str, keep: str, remove: str) -> list[str]:
+    """Lines of *text* containing every *keep* term and none of the *remove* terms.
+
+    Terms are whitespace-separated plain substrings (not regexes), matched case-insensitively;
+    an empty *keep* keeps every line.
+    """
+    keep_terms, remove_terms = keep.lower().split(), remove.lower().split()
+    return [line for line in text.splitlines()
+            if all(t in line.lower() for t in keep_terms) and not any(t in line.lower() for t in remove_terms)]
