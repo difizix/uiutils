@@ -25,3 +25,8 @@ def test_filter_lines_keeps_all_terms_and_drops_any_removed():
     text = "Epoch 1 loss 0.5\nepoch 2 LOSS nan\nwarning: slow\n"
     assert filter_lines(text, "", "") == text.splitlines()
     assert filter_lines(text, "epoch loss", "nan") == ["Epoch 1 loss 0.5"]
+    # regex support and list input
+    assert filter_lines(text.splitlines(), r"loss\s+0\.\d+", "") == ["Epoch 1 loss 0.5"]
+    assert filter_lines(text, "epoch|warning", "nan") == ["Epoch 1 loss 0.5", "warning: slow"]
+    # bad regex falls back to substring match
+    assert filter_lines(text, "[invalid", "") == []

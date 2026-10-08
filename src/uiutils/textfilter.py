@@ -4,6 +4,7 @@ Free of streamlit, so the filtering rules are testable and every picker filters 
 """
 
 import re
+from collections.abc import Sequence
 
 
 def filter_by_search_query(file_list, query_str) -> tuple[list, bool]:
@@ -41,12 +42,28 @@ def cycle_neighbors(items: list, current) -> tuple:
     return items[(idx - 1) % len(items)], items[(idx + 1) % len(items)]
 
 
-def filter_lines(text: str, keep: str, remove: str) -> list[str]:
+def filter_lines(text: str | Sequence[str], keep: str, remove: str) -> list[str]:
     """Lines of *text* containing every *keep* term and none of the *remove* terms.
 
-    Terms are whitespace-separated plain substrings (not regexes), matched case-insensitively;
-    an empty *keep* keeps every line.
+    Terms are whitespace-separated patterns (applied as case-insensitive regex searches,
+    falling back to plain substring matching on invalid regex); an empty *keep* keeps every line.
+    *text* can be a newline-delimited string or a sequence of lines.
     """
-    keep_terms, remove_terms = keep.lower().split(), remove.lower().split()
-    return [line for line in text.splitlines()
-            if all(t in line.lower() for t in keep_terms) and not any(t in line.lower() for t in remove_terms)]
+    keep_terms, remove_terms = keep.split(), remove.split()
+    raw_lines = text.splitlines() if isinstance(text, str) else text
+    if not keep_terms and not remove_terms:
+        return list(raw_lines)
+
+    def _matcher(term: str):
+        try:
+            pattern = re.compile(term, re.IGNORECASE)
+            return pattern.search
+        except re.error:
+            t = term.lower()
+            return lambda line: t in line.lower()
+
+    keep_matchers = [_matcher(t) for t in keep_terms]
+    remove_matchers = [_matcher(t) for t in remove_terms]
+
+    return [line for line in raw_lines
+            if all(m(line) for m in keep_matchers) and not any(m(line) for m in remove_matchers)]

@@ -16,6 +16,8 @@ from pathlib import Path
 
 import streamlit as st
 
+from uiutils.textfilter import filter_lines
+
 
 def _pump(proc: subprocess.Popen, out_q: queue.Queue) -> None:
     assert proc.stdout, "proc.stdout is not captured"
@@ -70,10 +72,12 @@ def _stop() -> None:
     ss.last_status = "Terminated"
 
 
-def render_proc_console(on_done: Callable[[], None] | None = None, height: int = 350) -> None:
+def render_proc_console(on_done: Callable[[], None] | None = None, height: int = 350,
+                        keep: str = "", remove: str = "") -> None:
     """Stop/Clear buttons and the output of the session's process, polled while it runs.
 
     Call it last on the page: while the process runs, it reruns the script every 50 ms.
+    *keep* and *remove* are whitespace-separated patterns (regex or plain text) to filter lines.
     """
     ss = st.session_state
     exit_code = _drain() if ss.get("running_process") is not None else None
@@ -88,11 +92,19 @@ def render_proc_console(on_done: Callable[[], None] | None = None, height: int =
     stop_col.button("⏹️ Stop", disabled=not running, on_click=_stop, key="console_stop")
     if clear_col.button("🧹 Clear", disabled=running, key="console_clear"):
         ss.process_log = []
-    status_col.caption(f"Status: {ss.get('last_status', 'Idle')}")
+
+    status_msg = f"Status: {ss.get('last_status', 'Idle')}"
+    lines = ss.get("process_log") or []
+    if lines and (keep.strip() or remove.strip()):
+        filtered = filter_lines(lines, keep, remove)
+        status_msg += f" | 🔍 Showing {len(filtered)} of {len(lines)} lines"
+        lines = filtered
+
+    status_col.caption(status_msg)
 
     if ss.get("process_log"):
         with st.container(height=height):
-            st.code("".join(ss.process_log), language="text")
+            st.code("".join(lines) if lines else "(no matching lines)", language="text")
 
     if running:
         time.sleep(0.05)

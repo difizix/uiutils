@@ -11,7 +11,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from uiutils.streamlit.widgets import filtered_select
+from uiutils.streamlit.widgets import filtered_select, line_filter
 from uiutils.textfilter import filter_lines
 
 
@@ -38,18 +38,6 @@ def render_plots(root: Path, get_files: Callable[[], list[str]], on_refresh: Cal
             st.caption(file_meta(path))
 
 
-def _line_filter() -> tuple[str, str]:
-    """Keep/remove terms, applied on submit only, so typing does not re-filter a large log."""
-    with st.form("log_line_filter", border=False):
-        st.write("### 🔍 Filter Log Display")
-        keep = st.text_input("Keep lines containing (split by space):", key="log_keep",
-                             help="Split by whitespace. If empty, keeps all lines.")
-        remove = st.text_input("Remove lines containing (split by space):", key="log_remove",
-                               help="Split by whitespace.")
-        st.form_submit_button("🚫 Filter", width="stretch")
-    return keep, remove
-
-
 def render_logs(root: Path, get_files: Callable[[], list[str]], on_refresh: Callable[[], None],
                 extra: Callable[[Path], None] | None = None):
     """Log picker (URL-bound as `?log=`), a line filter and the selected log's text.
@@ -65,7 +53,7 @@ def render_logs(root: Path, get_files: Callable[[], list[str]], on_refresh: Call
         path = Path(root) / selected
         if extra:
             extra(path)
-        keep, remove = _line_filter()
+        keep, remove = line_filter("log")
 
     with col_view:
         st.write(f"#### `{selected}`")
