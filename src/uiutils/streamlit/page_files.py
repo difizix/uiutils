@@ -22,12 +22,12 @@ def file_meta(path: Path) -> str:
     return f"📅 Last Modified: {mod_time} | 📦 Size: {stats.st_size / 1024:.2f} KB"
 
 
-def render_plots(root: Path, files: Callable[[], list[str]], on_refresh: Callable[[], None]):
+def render_plots(root: Path, get_files: Callable[[], list[str]], on_refresh: Callable[[], None]):
     """Image picker (URL-bound as `?plot=`) and the selected image."""
     col_ctrl, col_view = st.columns([3, 4])
     with col_ctrl:
-        st.write("### 🖼️ Generated Plots")
-        selected = filtered_select("plot", "Select Plot to display:", files(), on_refresh)
+        files = get_files()
+        selected = filtered_select("plot", "Plot", files, on_refresh, icon="🖼️")
     if not selected:
         return
     path = Path(root) / selected
@@ -50,7 +50,7 @@ def _line_filter() -> tuple[str, str]:
     return keep, remove
 
 
-def render_logs(root: Path, files: Callable[[], list[str]], on_refresh: Callable[[], None],
+def render_logs(root: Path, get_files: Callable[[], list[str]], on_refresh: Callable[[], None],
                 extra: Callable[[Path], None] | None = None):
     """Log picker (URL-bound as `?log=`), a line filter and the selected log's text.
 
@@ -58,8 +58,8 @@ def render_logs(root: Path, files: Callable[[], list[str]], on_refresh: Callable
     """
     col_ctrl, col_view = st.columns([2, 3])
     with col_ctrl:
-        st.write("### 📄 Output Log Files")
-        selected = filtered_select("log", "Select Log file to display:", files(), on_refresh)
+        files = get_files()
+        selected = filtered_select("log", "Log file", files, on_refresh, icon="📄")
         if not selected:
             return
         path = Path(root) / selected

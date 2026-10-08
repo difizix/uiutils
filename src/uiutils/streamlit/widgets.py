@@ -5,7 +5,7 @@ import streamlit as st
 from uiutils.textfilter import cycle_neighbors, filter_by_search_query
 
 
-def filtered_select(name, label, items, on_refresh):
+def filtered_select(name, label, items, on_refresh, icon=""):
     """Refresh button, regex filter box, selectbox and Previous/Next buttons over *items*.
 
     The selection and the filter text are bound to the URL as `?<name>=...&<name>q=...`, so
@@ -14,7 +14,7 @@ def filtered_select(name, label, items, on_refresh):
     """
     ref_col, search_col = st.columns([1, 2])
     ref_col.button("🔄 Refresh", key=f"{name}_refresh", on_click=on_refresh)
-    query = search_col.text_input(f"Filter {label}", placeholder="Search/filter (regex)...",
+    query = search_col.text_input(f"_Filter {label}", placeholder=f"{label} search/filter (regex)..., {len(items)} in total",
                                   label_visibility="collapsed", key=f"{name}q", bind="query-params")
 
     filtered, has_err = filter_by_search_query(items, query)
@@ -26,7 +26,7 @@ def filtered_select(name, label, items, on_refresh):
         st.info("No matches.")
         return None
 
-    selected = st.selectbox(label, filtered, format_func=str, key=name, bind="query-params")
+    selected = st.selectbox(f"{icon} Select {label}", filtered, format_func=str, key=name, bind="query-params")
 
     def select(item):
         st.session_state[name] = item

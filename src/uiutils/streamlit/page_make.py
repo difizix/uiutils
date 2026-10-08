@@ -12,7 +12,6 @@ from uiutils.streamlit.widgets import filtered_select
 
 def render_make(root: Path, on_done: Callable[[], None] | None = None):
     """Targets of `<root>/Makefile`, run with `make` in *root*; *on_done* runs when make exits."""
-    st.write("### 🛠️ Make targets")
     makefile = Path(root) / "Makefile"
     if not makefile.is_file():
         st.info(f"No Makefile in {root}.")
@@ -20,7 +19,7 @@ def render_make(root: Path, on_done: Callable[[], None] | None = None):
 
     targets, variables = parse_makefile(makefile)
     by_name = {t.name: t for t in targets}
-    name = filtered_select("mk", "Target", list(by_name), on_refresh=lambda: None)
+    name = filtered_select("mk", "Make Target", list(by_name), on_refresh=lambda: None, icon="📦")
     if name is None:
         return
     target = by_name[name]

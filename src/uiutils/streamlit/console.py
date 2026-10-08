@@ -18,6 +18,7 @@ import streamlit as st
 
 
 def _pump(proc: subprocess.Popen, out_q: queue.Queue) -> None:
+    assert proc.stdout, "proc.stdout is not captured"
     for line in iter(proc.stdout.readline, ""):
         out_q.put(line)
     proc.stdout.close()
