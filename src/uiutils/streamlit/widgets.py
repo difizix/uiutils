@@ -39,12 +39,14 @@ def filtered_select(name, label, items, on_refresh, icon=""):
 
 
 def line_filter(key_prefix: str = "log") -> tuple[str, str]:
-    """Keep/remove terms, applied on submit only, so typing does not re-filter a large log."""
+    """Keep/remove terms, applied on submit only, so typing does not re-filter a large log.
+
+    URL-bound as `?<key_prefix>_keep=` and `?<key_prefix>_remove=`."""
     with st.form(f"{key_prefix}_line_filter", border=False):
         st.write("### 🔍 Filter Log Display")
-        keep = st.text_input("Keep lines containing (split by space):", key=f"{key_prefix}_keep",
+        keep = st.text_input("Keep lines containing (split by space):", key=f"{key_prefix}_keep", bind="query-params",
                              help="Split by whitespace. Words or regex. If empty, keeps all lines.")
-        remove = st.text_input("Remove lines containing (split by space):", key=f"{key_prefix}_remove",
+        remove = st.text_input("Remove lines containing (split by space):", key=f"{key_prefix}_remove", bind="query-params",
                                help="Split by whitespace. Words or regex.")
         st.form_submit_button("🚫 Filter", width="stretch")
     return keep, remove
