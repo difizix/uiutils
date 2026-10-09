@@ -33,11 +33,13 @@ def is_proc_running() -> bool:
 
 
 def start_proc(argv: list[str], cwd: Path | str, env: dict[str, str] | None = None) -> None:
-    """Start *argv* in its own process group and rerun, so render_proc_console streams it."""
+    """Start *argv* in its own process group and rerun, so render_proc_console streams it.
+
+    stdin is /dev/null: an inherited terminal stdin makes `inv` try tty job control in the detached session (ENOTTY)."""
     ss = st.session_state
     ss.process_log = []
     try:
-        proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=str(cwd), env=env,
+        proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=str(cwd), env=env,
                                 text=True, bufsize=1, start_new_session=True)
     except OSError as e:
         ss.last_status = "Failed to start"
