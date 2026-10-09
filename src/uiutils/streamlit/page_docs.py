@@ -91,6 +91,14 @@ def render_markdown(md: str, md_dir: Path, root: Path, pages: dict):
             _render_mermaid(val)
 
 
+def render_md_file(path: Path, root: Path, pages: dict):
+    """Render one markdown file as a page (Home, DevOps)."""
+    if not Path(path).is_file():
+        st.info(f"`{Path(path).relative_to(root)}` not found.")
+        return
+    render_markdown(Path(path).read_text(encoding="utf-8"), Path(path).parent, root, pages)
+
+
 def render_docs(root: Path, pages: dict):
     """Markdown picker (URL-bound as `?doc=`) and the selected document."""
     sstate = st.session_state
