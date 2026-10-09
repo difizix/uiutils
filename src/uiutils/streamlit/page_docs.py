@@ -1,4 +1,4 @@
-"""Docs page and markdown renderer: inlined images, page-link buttons, mermaid diagrams.
+"""Docs page (tree browser + viewer) and markdown renderer: inlined images, page-link buttons, mermaid diagrams.
 
 *pages* maps a url_path to its `st.Page` (needed by `st.page_link`); *root* is the repo root that
 `docs?doc=` labels and relative links are resolved against.
@@ -18,7 +18,9 @@ from uiutils.mdrender import (
     split_trailing_links,
 )
 from uiutils.streamlit.page_files import file_meta
-from uiutils.streamlit.widgets import filtered_select
+from uiutils.streamlit.tree import render_tree
+from uiutils.textfilter import filter_by_search_query
+from uiutils.tree import build_tree
 
 _MERMAID_HTML = """<!DOCTYPE html>
 <html>
@@ -91,28 +93,29 @@ def render_markdown(md: str, md_dir: Path, root: Path, pages: dict):
             _render_mermaid(val)
 
 
-def render_md_file(path: Path, root: Path, pages: dict):
-    """Render one markdown file as a page (Home, DevOps)."""
-    if not Path(path).is_file():
-        st.info(f"`{Path(path).relative_to(root)}` not found.")
-        return
-    render_markdown(Path(path).read_text(encoding="utf-8"), Path(path).parent, root, pages)
+def render_docs(root: Path, pages: dict, subdir: str, default: str):
+    """Tree of the markdown files under *root*/*subdir* and the selected one (`?doc=`, *default* if unset).
 
-
-def render_docs(root: Path, pages: dict):
-    """Markdown picker (URL-bound as `?doc=`) and the selected document."""
+    Served by `pages["docs"]`, the route `gui_href` maps relative `.md` links to.
+    """
     sstate = st.session_state
-
-    def refresh():
-        sstate.report_files = find_reports(root)
-
+    prefix = f"{subdir}/"
     if "report_files" not in sstate:
-        refresh()
+        sstate.report_files = [f for f in find_reports(root) if f.startswith(prefix)]
+    selected = st.query_params.get("doc", default)
+
     col_ctrl, col_view = st.columns([1, 3])
     with col_ctrl:
-        selected = filtered_select("doc", "Select Document:", sstate.report_files, refresh, icon="📋")
-    if not selected:
-        return
+        with st.container(horizontal=True, vertical_alignment="bottom"):
+            query = st.text_input("Filter (regex)", key="docq", bind="query-params")
+            if st.button("🔄", help="Rescan the markdown files"):
+                del sstate.report_files
+                st.rerun()
+        files, bad_regex = filter_by_search_query(sstate.report_files, query)
+        if bad_regex:
+            st.error("Invalid regex")
+        render_tree(build_tree(files, strip=prefix), pages["docs"], "doc", selected, expand_all=bool(query.strip()))
+
     path = Path(root) / selected
     with col_view:
         st.write(f"#### `{selected}`")
