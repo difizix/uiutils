@@ -1,7 +1,7 @@
 """Read a Makefile's runnable targets and its user-overridable (`?=`) variables.
 
-A small regex reader, not a make implementation: no includes, conditionals or variable
-expansion. Enough to list targets in a GUI and run them as `make <target> VAR=value`.
+A small regex reader, not a make implementation: plain `include`s are followed (relative to the
+including Makefile), but no conditionals or variable expansion. Enough to list targets in a GUI and run them as `make <target> VAR=value`.
 """
 
 import re
@@ -11,6 +11,7 @@ from pathlib import Path
 # "name [name2]: [prereqs] [# doc]", but not "VAR := value" or "a::b"
 _TARGET_RE = re.compile(r"^([^\s#=:][^#=:]*?)\s*:(?![=:])(.*)$")
 _VAR_RE = re.compile(r"^([A-Za-z_]\w*)\s*\?=\s*(.*)$")
+_INCLUDE_RE = re.compile(r"^-?include\s+(.+)$")
 
 
 @dataclass
@@ -46,7 +47,14 @@ def parse_makefile(path: Path | str) -> tuple[list[MakeTarget], dict[str, str]]:
             continue
 
         current = []
-        if m := _VAR_RE.match(line):
+        if m := _INCLUDE_RE.match(line):
+            for inc in m[1].split():
+                inc_path = Path(path).parent / inc
+                if "$" not in inc and inc_path.is_file():
+                    inc_targets, inc_vars = parse_makefile(inc_path)
+                    targets.extend(inc_targets)
+                    variables.update({k: v for k, v in inc_vars.items() if k not in variables})
+        elif m := _VAR_RE.match(line):
             variables[m[1]] = m[2].strip()
         elif m := _TARGET_RE.match(line):
             names = m[1].split()

@@ -4,6 +4,7 @@
 `docs?doc=` labels and relative links are resolved against.
 """
 
+from collections.abc import Sequence
 from pathlib import Path
 from urllib.parse import parse_qsl
 
@@ -93,15 +94,16 @@ def render_markdown(md: str, md_dir: Path, root: Path, pages: dict):
             _render_mermaid(val)
 
 
-def render_docs(root: Path, pages: dict, subdir: str, default: str):
+def render_docs(root: Path, pages: dict, subdir: str | Sequence[str], default: str):
     """Tree of the markdown files under *root*/*subdir* and the selected one (`?doc=`, *default* if unset).
 
-    Served by `pages["docs"]`, the route `gui_href` maps relative `.md` links to.
+    *subdir* may be several folders under *root*, e.g. `("docs", "runs")`; each is then a top-level
+    folder of the tree. Served by `pages["docs"]`, the route `gui_href` maps relative `.md` links to.
     """
     sstate = st.session_state
-    prefix = f"{subdir}/"
+    subdirs = [subdir] if isinstance(subdir, str) else list(subdir)
     if "report_files" not in sstate:
-        sstate.report_files = [f for f in find_reports(root) if f.startswith(prefix)]
+        sstate.report_files = [f"{d}/{f}" for d in subdirs for f in find_reports(Path(root) / d)]
     selected = st.query_params.get("doc", default)
 
     col_ctrl, col_view = st.columns([1, 3])
@@ -114,7 +116,7 @@ def render_docs(root: Path, pages: dict, subdir: str, default: str):
         files, bad_regex = filter_by_search_query(sstate.report_files, query)
         if bad_regex:
             st.error("Invalid regex")
-        render_tree(build_tree(files, strip=prefix), pages["docs"], "doc", selected, expand_all=bool(query.strip()))
+        render_tree(build_tree(files, strip=f"{subdirs[0]}/" if len(subdirs) == 1 else ""), pages["docs"], "doc", selected, expand_all=bool(query.strip()))
 
     path = Path(root) / selected
     with col_view:

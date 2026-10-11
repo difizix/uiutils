@@ -10,11 +10,12 @@ from uiutils.streamlit.console import is_proc_running, render_proc_console, star
 from uiutils.streamlit.widgets import filtered_select, line_filter
 
 
-def render_make(root: Path, on_done: Callable[[], None] | None = None):
-    """Targets of `<root>/Makefile`, run with `make` in *root*; *on_done* runs when make exits."""
-    makefile = Path(root) / "Makefile"
+def render_make(root: Path, on_done: Callable[[], None] | None = None, makefile: Path | None = None):
+    """Targets of *makefile* (default `<root>/Makefile`), run with `make` in *root*; *on_done* runs when make exits."""
+    mk_args = [] if makefile is None else ["-f", str(makefile)]
+    makefile = Path(root) / "Makefile" if makefile is None else Path(makefile)
     if not makefile.is_file():
-        st.info(f"No Makefile in {root}.")
+        st.info(f"No {makefile}.")
         return
 
     col_ctrl, col_view = st.columns([2, 3])
@@ -37,7 +38,7 @@ def render_make(root: Path, on_done: Callable[[], None] | None = None):
                         if val != default:
                             overrides.append(f"{var}={val}")
 
-            argv = ["make", name, *overrides]
+            argv = ["make", *mk_args, name, *overrides]
             st.code(" ".join(argv), language="bash")
             if st.button("▶️ Run", type="primary", disabled=is_proc_running(), key="mk_run"):
                 start_proc(argv, cwd=root)
