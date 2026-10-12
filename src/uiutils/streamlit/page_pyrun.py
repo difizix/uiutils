@@ -20,7 +20,7 @@ import streamlit as st
 
 from uiutils.argparse_form import capture_parser, form2argv, parser2uiparams
 from uiutils.streamlit.console import is_proc_running, render_proc_console, start_proc
-from uiutils.streamlit.forms import render_parseargs
+from uiutils.streamlit.forms import render_param, render_parseargs
 from uiutils.streamlit.widgets import line_filter
 
 
@@ -34,16 +34,18 @@ def _parser(path: str, _mtime: float, sys_paths: tuple[str, ...]):
 
 
 def render_pyrun(root: Path, scripts: list[str], python: str = sys.executable, env: dict[str, str] | None = None,
-                 sys_paths: tuple[str, ...] = (), on_done: Callable[[], None] | None = None):
+                 sys_paths: tuple[str, ...] = (), on_done: Callable[[], None] | None = None,
+                 render: Callable[..., object] = render_param):
     """Run one of *scripts* (paths relative to *root*) as `python <script> <argv>` in *root*.
 
     Each script must call ArgumentParser.parse_args() before doing any work: its parser is read
     by running it up to that call (see capture_parser). *sys_paths* are added to this process's
     sys.path for that, for scripts importing project modules; *env* is the subprocess's environment.
+    *render* draws one form param (see render_parseargs).
     """
     col_ctrl, col_view = st.columns([2, 3])
     with col_ctrl:
-        rel_path = st.selectbox("Script", scripts, key="pyrun_script", bind="query-params")
+        rel_path = st.selectbox("Script", scripts, key="pyrun_script", accept_new_options=True, bind="query-params")
         path = Path(root) / rel_path
         try:
             parser = _parser(str(path), path.stat().st_mtime, tuple(sys_paths))
@@ -53,7 +55,7 @@ def render_pyrun(root: Path, scripts: list[str], python: str = sys.executable, e
         if parser.description:
             st.caption(parser.description)
 
-        values = render_parseargs(parser2uiparams(parser), key_prefix=f"pyrun_{path.stem}")
+        values = render_parseargs(parser2uiparams(parser), key_prefix=f"pyrun_{path.stem}", render=render)
         argv = [python, rel_path, *form2argv(parser, values)]
         st.code(shlex.join(argv), language="bash")
 

@@ -26,7 +26,7 @@ def filtered_select(name, label, items, on_refresh, icon=""):
         st.info("No matches.")
         return None
 
-    selected = st.selectbox(f"{icon} Select {label}", filtered, format_func=str, key=name, bind="query-params")
+    selected = st.selectbox(f"{icon} Select {label}", filtered, format_func=str, key=name, accept_new_options=True, bind="query-params")
 
     def select(item):
         st.session_state[name] = item
