@@ -39,17 +39,18 @@ def render_plots(root: Path, get_files: Callable[[], list[str]], on_refresh: Cal
 
 
 def render_logs(root: Path, get_files: Callable[[], list[str]], on_refresh: Callable[[], None],
-                extra: Callable[[Path], None] | None = None):
+                extra: Callable[[Path], None] | None = None) -> Path | None:
     """Log picker (URL-bound as `?log=`), a line filter and the selected log's text.
 
     *extra(path)* draws app-specific controls for the selected log, under the picker.
+    Returns the selected log's path, None when nothing is selected or it cannot be read.
     """
     col_ctrl, col_view = st.columns([2, 3])
     with col_ctrl:
         files = get_files()
         selected = filtered_select("log", "Log file", files, on_refresh, icon="📄")
         if not selected:
-            return
+            return None
         path = Path(root) / selected
         if extra:
             extra(path)
@@ -61,10 +62,11 @@ def render_logs(root: Path, get_files: Callable[[], list[str]], on_refresh: Call
             text, meta = path.read_text(errors="replace"), file_meta(path)
         except OSError as e:
             st.error(f"Failed to read file {selected}: {e}")
-            return
+            return None
         if keep.strip() or remove.strip():
             lines = filter_lines(text, keep, remove)
             meta += f" | 🔍 Showing {len(lines)} of {len(text.splitlines())} lines"
             text = "\n".join(lines)
         st.caption(meta)
         st.text_area("File Contents", value=text, height=600)
+    return path
