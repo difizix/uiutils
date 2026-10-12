@@ -1,4 +1,15 @@
-"""Scripts page: pick a python script, fill in its argparse options as a form, run it in the console."""
+"""Scripts page: pick a python script, fill in its argparse options as a form, run it in the console.
+
+What a script needs to be listed here, with no GUI code in it:
+
+* It calls `ArgumentParser.parse_args()` before doing any work. Its parser is read by running it as
+  `__main__` up to that call (`capture_parser`), so its imports and top-level code do run: keep them
+  cheap and free of side effects. A script that reads `sys.argv` by hand cannot be shown.
+* `parser.description` is the form's caption; `ArgumentParser(description=__doc__)` keeps one source.
+* Option types pick the widgets (see `parser2uiparams` and `forms.render_param`). Only options changed
+  from their default are passed (see `form2argv`).
+* It runs as `python <script> <argv>` with cwd *root*, so relative default paths resolve from *root*.
+"""
 
 import shlex
 import sys
@@ -36,7 +47,7 @@ def render_pyrun(root: Path, scripts: list[str], python: str = sys.executable, e
         path = Path(root) / rel_path
         try:
             parser = _parser(str(path), path.stat().st_mtime, tuple(sys_paths))
-        except Exception as e:  # noqa: BLE001 -- any import/top-level error of the script itself
+        except Exception as e:
             st.error(f"Could not read the options of `{rel_path}`: {e}")
             return
         if parser.description:

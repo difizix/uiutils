@@ -21,7 +21,13 @@ class FormParam:
 
 
 def parser2uiparams(parser: argparse.ArgumentParser, fixedargs=None) -> list[FormParam]:
-    """One FormParam per argument of *parser*, except --help and the dests in *fixedargs*."""
+    """One FormParam per argument of *parser*, except --help and the dests in *fixedargs*.
+
+    The FormParam type picks the widget: `nargs="+"`/`"*"` -> list (one value per line);
+    `default=None` -> str, so an unset option can stay empty; otherwise `type=` or the default's type,
+    so `store_true`/`store_false` -> bool (checkbox). `choices` are not offered as a select; argparse
+    checks them when the script runs.
+    """
     fixedargs = fixedargs or {}
     ui_params = []
     for action in parser._actions:
