@@ -2,7 +2,7 @@
 
 **uiutils** is a lightweight, modular developer toolkit specifically designed to turn scientific / simulation CLI repositories (with Makefiles, argparse scripts, and markdown docs) into a cohesive Streamlit dashboard without introducing heavy frameworks or altering underlying scripts.
 
-Used in [porgui] and [difgui] (private atm) and hopefully your Streamlit-based applications.
+Used in [porgui] and difgui (private) and hopefully your Streamlit-based applications.
 
 
 > [!NOTE]
@@ -16,51 +16,24 @@ Small GUI helpers, framework-free at the core:
 * `uiutils.textfilter`: regex filtering and wrap-around neighbours for list pickers, keep/remove line filtering.
 * `uiutils.file_discovery`: plots, logs and markdown reports under a root, newest first, with app rules as `prune`/`keep` callables.
 * `uiutils.mdrender`: markdown preprocessing for a viewer: inline images, in-app links, mermaid blocks.
-* `uiutils.streamlit` (needs `pip install uiutils[streamlit]`): a lazy page factory for `st.navigation`, a filtered picker, argparse forms, a process console, and ready-made Make, Scripts, Plots and Logs pages.
+* `uiutils.tree`: a nested folder tree of relative paths, for tree browsers.
+* `uiutils.streamlit` (needs the `streamlit` extra): a lazy page factory for `st.navigation`, a filtered picker, argparse forms, a process console, and ready-made Make, Scripts, Plots, Logs, Arrays and Docs pages.
+* `uiutils.streamlit.slice_view`: an n-d numpy array slice viewer: normal axis and slice, log scale, colour range relative to min-max, colormaps, axes and colorbar, transpose; used by the Arrays page for `.npy`/`.npz` files.
 
-The core has no dependencies; `streamlit` is the only optional one.
+The core has no dependencies. The `streamlit` extra needs Streamlit >= 1.64 (widgets bound to URL query
+parameters); the slice viewer's "Axes & colorbar" option also uses matplotlib, if installed.
 
-
-## Quickstart
-
-Save the snippet to a file (e.g., `app.py`):
-
-```python
-# app.py
-from pathlib import Path
-import streamlit as st
-from uiutils.streamlit.page_make import render_make
-from uiutils.streamlit.page_pyrun import render_pyrun
-
-st.title("Project Dashboard")
-
-# 1. Interactive Makefile runner with variable overrides & streaming console
-render_make(root=Path("."))
-
-# 2. Interactive Python script runner with auto-generated argparse forms
-render_pyrun(root=Path("."), scripts=["scripts/process_data.py"])
-```
-
-Then launch the Streamlit app, e.g.:
-
-```bash
-python -m streamlit run app.py
-```
 
 
 ## Installation
 
-From PyPI:
+Not on PyPI yet; install from GitHub:
 
 ```bash
-pip install uiutils[streamlit]
+pip install "uiutils[streamlit] @ git+https://github.com/difizix/uiutils.git@main"
 ```
 
-Or directly from GitHub:
-
-```bash
-pip install "uiutils[streamlit] @ git+https://github.com/difizix/uiutils.git"
-```
+Pin a commit (`@<hash>`) rather than `@main`: the API is still changing.
 
 For development:
 
@@ -71,6 +44,35 @@ pip install -e ".[streamlit]"
 python -m pytest
 ```
 
+## Quickstart
+
+Save the snippet to a file (e.g., `app.py`); each tool is its own page:
+
+```python
+# app.py
+from pathlib import Path
+import streamlit as st
+from uiutils.streamlit.pages import page
+
+root = Path(".")
+arrays = [str(p) for p in root.rglob("*.np[yz]")]
+st.navigation([
+    # Makefile targets with variable overrides and a streaming console
+    page("uiutils.streamlit.page_make:render_make", "Make", "🛠️", "make", default=True, args=(root,)),
+    # Python scripts with forms generated from their argparse parsers
+    page("uiutils.streamlit.page_pyrun:render_pyrun", "Scripts", "🐍", "scripts",
+         args=(root, ["scripts/process_data.py"])),
+    # .npy/.npz slice viewer
+    page("uiutils.streamlit.page_files:render_arrays", "Arrays", "🧊", "arrays",
+         args=(root, lambda: arrays, lambda: None)),
+]).run()
+```
+
+Then launch the Streamlit app, e.g.:
+
+```bash
+python -m streamlit run app.py
+```
+
 
 [porgui]: https://github.com/difizix/porgui
-[difgui]: https://github.com/difizix/difiz

@@ -1,4 +1,4 @@
-from uiutils.file_discovery import find_outputs, find_reports
+from uiutils.file_discovery import find_arrays, find_outputs, find_reports
 
 
 def _touch(root, *rels):
@@ -15,6 +15,12 @@ def test_find_outputs_skips_excluded_and_pruned_dirs(tmp_path):
 
     assert pngs == ["a.png"]
     assert set(logs) == {"log_a.txt", "d/run.log"}
+
+
+def test_find_arrays_npy_npz_only_and_pruned(tmp_path):
+    _touch(tmp_path, "a.npy", "d/b.npz", "c.png", "big/e.npy", ".venv/f.npy")
+
+    assert set(find_arrays(tmp_path, prune=lambda d: d.name == "big")) == {"a.npy", "d/b.npz"}
 
 
 def test_find_reports_depth_limit_and_agents_exclusion(tmp_path):

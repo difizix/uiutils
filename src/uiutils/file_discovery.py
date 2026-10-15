@@ -1,4 +1,4 @@
-"""Find the files a GUI lists: plots, logs and markdown reports.
+"""Find the files a GUI lists: plots, logs, numpy arrays and markdown reports.
 
 Paths are returned as `str`, relative to *root*, newest first. App-specific rules (which run
 directories hold duplicates, which are too big to walk) come in as `prune`/`keep` callables.
@@ -61,6 +61,12 @@ def find_outputs(root: Path, prune: Callable[[Path], bool] | None = None,
         elif is_log(path):
             log_files.append(path)
     return mtime_sorted(root, png_files), mtime_sorted(root, log_files)
+
+
+def find_arrays(root: Path, prune: Callable[[Path], bool] | None = None) -> list[str]:
+    """Every `.npy`/`.npz` under *root*, newest first."""
+    root = Path(root)
+    return mtime_sorted(root, [p for p in walk_files(root, prune) if p.suffix in (".npy", ".npz")])
 
 
 def find_reports(root: Path) -> list[str]:
