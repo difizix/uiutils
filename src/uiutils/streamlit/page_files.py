@@ -1,4 +1,4 @@
-"""Plots, Logs and Arrays pages: pick an output file under a root directory and view it.
+"""Plots and Logs pages: pick an output file under a root directory and view it.
 
 *files* is a zero-arg callable returning the current paths (relative to *root*), so the app keeps
 its own file list (and its refresh, *on_refresh*) shared with its other pages.
@@ -9,10 +9,8 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-import numpy as np
 import streamlit as st
 
-from uiutils.streamlit.slice_view import render_slices
 from uiutils.streamlit.widgets import filtered_select, line_filter
 from uiutils.textfilter import filter_lines
 
@@ -73,34 +71,3 @@ def render_logs(root: Path, get_files: Callable[[], list[str]], on_refresh: Call
         st.text_area("File Contents", value=text, height=600)
     return path
 
-
-def render_arrays(root: Path, get_files: Callable[[], list[str]], on_refresh: Callable[[], None]):
-    """`.npy`/`.npz` picker (URL-bound as `?arr=`, an npz member as `?arr_key=`) and its slices."""
-    col_ctrl, col_meta = st.columns([2, 3])
-    with col_ctrl:
-        selected = filtered_select("arr", "Array", get_files(), on_refresh, icon="🧊")
-    if not selected:
-        return
-    path = Path(root) / selected
-    with col_meta:
-        st.write(f"#### `{selected}`")
-        try:
-            st.caption(file_meta(path))
-            if path.suffix != ".npz":
-                arr = np.load(path, mmap_mode="r")
-            else:
-                with np.load(path) as npz:
-                    names = npz.files
-                    if not names:
-                        st.info("Empty npz.")
-                        return
-                    name = names[0]
-                    if len(names) > 1:  # pick which of the npz's arrays to view
-                        if st.session_state.get("arr_key") not in names:
-                            st.session_state.pop("arr_key", None)
-                        name = st.selectbox(f"Member ({len(names)})", names, key="arr_key", bind="query-params")
-                    arr = npz[name]
-        except (OSError, ValueError) as e:  # unreadable, or pickled object arrays
-            st.error(f"Failed to load {selected}: {e}")
-            return
-    render_slices(arr, "arr_")

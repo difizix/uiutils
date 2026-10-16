@@ -13,7 +13,7 @@ from PIL import Image
 VIEW_PX = 512
 
 # "gray" without axes is drawn without matplotlib
-CMAPS = ["gray", "viridis", "magma", "turbo", "coolwarm"]
+CMAPS = ["turbo", "gray", "viridis", "magma", "coolwarm"]
 
 
 def _drop_stale(key, ok):

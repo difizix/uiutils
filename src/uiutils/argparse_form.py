@@ -5,6 +5,7 @@ renderer, and `form2argv` turns the form's values back into the script's command
 """
 
 import argparse
+import importlib
 import runpy
 import sys
 from pathlib import Path
@@ -68,6 +69,32 @@ def form2argv(parser: argparse.ArgumentParser, values: dict) -> list[str]:
             continue  # val differs from the default, so the flag alone says it
         options += _strs(val)
     return positionals + options
+
+
+def module_func_args(module_name: str, parser_func: str, main_func: str, type_of=None):
+    """(main wrapped to take form values as kwargs, form params) of a module with an argparse CLI.
+
+    `parser_func()` builds the module's parser; the wrapped main runs with `sys.argv` set from the
+    values (see form2argv). *type_of(name, help_text, type_val)* replaces each param's type_val,
+    e.g. to pick an app's own file dropdown by the option's name.
+    """
+    module = importlib.import_module(module_name)
+    parser = getattr(module, parser_func)()
+    main = getattr(module, main_func)
+    params = parser2uiparams(parser)
+    if type_of:
+        for p in params:
+            p.type_val = type_of(p.name, p.help_text, p.type_val)
+
+    def wrapped(**kwargs):
+        orig_argv = sys.argv
+        sys.argv = [main.__module__, *form2argv(parser, kwargs)]
+        try:
+            return main()
+        finally:
+            sys.argv = orig_argv
+
+    return wrapped, params
 
 
 class _ParserCaptured(Exception):

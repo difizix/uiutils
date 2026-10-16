@@ -1,8 +1,8 @@
 """st.Page factory for st.navigation, importing a page's module only when the page is opened."""
 
-import importlib
-
 import streamlit as st
+
+from uiutils.func_form import import_target
 
 
 def page(target: str, title: str, icon: str, url_path: str, default: bool = False, args: tuple = ()) -> st.Page:
@@ -11,9 +11,7 @@ def page(target: str, title: str, icon: str, url_path: str, default: bool = Fals
     st.page_link matches a page by url_path alone, so a second page() call with the same
     url_path can be used to link to it.
     """
-    module, func = target.split(":")
-
     def run():
-        getattr(importlib.import_module(module), func)(*args)
+        import_target(target)(*args)
 
     return st.Page(run, title=title, icon=icon, url_path=url_path, default=default)
