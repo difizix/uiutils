@@ -11,7 +11,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from uiutils.streamlit.widgets import filtered_select, line_filter
+from uiutils.streamlit.widgets import filtered_select, line_filter, log_png_grid
 from uiutils.textfilter import filter_lines
 
 
@@ -40,7 +40,7 @@ def render_plots(root: Path, get_files: Callable[[], list[str]], on_refresh: Cal
 
 def render_logs(root: Path, get_files: Callable[[], list[str]], on_refresh: Callable[[], None],
                 extra: Callable[[Path], None] | None = None) -> Path | None:
-    """Log picker (URL-bound as `?log=`), a line filter and the selected log's text.
+    """Log picker (URL-bound as `?log=`), a line filter, the selected log's text and the plots it mentions.
 
     *extra(path)* draws app-specific controls for the selected log, under the picker.
     Returns the selected log's path, None when nothing is selected or it cannot be read.
@@ -69,5 +69,6 @@ def render_logs(root: Path, get_files: Callable[[], list[str]], on_refresh: Call
             text = "\n".join(lines)
         st.caption(meta)
         st.text_area("File Contents", value=text, height=600)
+    log_png_grid(path, root, key="log")
     return path
 

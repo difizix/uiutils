@@ -16,6 +16,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from uiutils.streamlit.widgets import png_grid
 from uiutils.textfilter import filter_lines
 
 
@@ -37,7 +38,7 @@ def start_proc(argv: list[str], cwd: Path | str, env: dict[str, str] | None = No
 
     stdin is /dev/null: an inherited terminal stdin makes `inv` try tty job control in the detached session (ENOTTY)."""
     ss = st.session_state
-    ss.process_log = []
+    ss.process_log, ss.process_cwd = [], cwd
     try:
         proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=str(cwd), env=env,
                                 text=True, bufsize=1, start_new_session=True)
@@ -107,6 +108,8 @@ def render_proc_console(on_done: Callable[[], None] | None = None, height: int =
     if ss.get("process_log"):
         with st.container(height=height):
             st.code("".join(lines) if lines else "(no matching lines)", language="text")
+        if not running and ss.get("process_cwd"):  # not while streaming: the page reruns every 50 ms then
+            png_grid("".join(ss.process_log), ss.process_cwd, key="console", n_cols=2)
 
     if running:
         time.sleep(0.05)
