@@ -59,6 +59,15 @@ def add_ratio(df: pd.DataFrame, col: str, num, den, value: str = "value") -> pd.
     return pd.concat([df, ratio[df.columns]], ignore_index=True)
 
 
+def normalize_by_colour(grouped: pd.DataFrame, colour_col: str, val_col: str) -> pd.DataFrame:
+    """Divide *val_col* by each *colour_col*'s maximum so each series peaks at 1.0."""
+    grouped = grouped.copy()
+    maxes = grouped.groupby(colour_col, dropna=False)[val_col].transform("max")
+    nonzero = maxes.replace(0, np.nan)
+    grouped[val_col] = (grouped[val_col] / nonzero).fillna(grouped[val_col])
+    return grouped
+
+
 def _pick(label: str, options: list, key: str, **kw):
     """URL-bound selectbox that forgets a value not among this file's *options*."""
     _drop_stale(key, lambda v: v in options)
@@ -148,11 +157,18 @@ def render_long_table(root: Path, get_files: Callable[[], list[str]], on_refresh
                            format_func=lambda c: c or "none")
         with a_c:
             agg = _pick("Aggregate", AGGS, "long_agg")
-        kind = st.radio("Chart", ["bar", "line"], horizontal=True, key="long_chart", bind="query-params")
+        k_c, n_c = st.columns([2, 1], vertical_alignment="bottom")
+        with k_c:
+            kind = st.radio("Chart", ["bar", "line"], horizontal=True, key="long_chart", bind="query-params")
+        with n_c:
+            norm = st.checkbox("Normalize y", key="long_norm", bind="query-params", disabled=not colour,
+                               help="Scale each colour series by its maximum so peaks equal 1.0")
         st.caption(f"{len(df)} rows after filters")
 
     keys = [x, colour] if colour else [x]
     grouped = df.groupby(keys, dropna=False)[value].agg(agg).reset_index()
+    if norm and colour:
+        grouped = normalize_by_colour(grouped, colour, value)
     # columns renamed: Vega-Lite misreads "/" and "." in field names
     data = pd.DataFrame({"x": grouped[x].astype(str), "v": grouped[value]})
     if colour:
@@ -163,5 +179,11 @@ def render_long_table(root: Path, get_files: Callable[[], list[str]], on_refresh
             return
         chart = st.bar_chart if kind == "bar" else st.line_chart
         extra = {"stack": False, "sort": False} if kind == "bar" else {}
-        chart(data, x="x", y="v", color="c" if colour else None, x_label=x, y_label=f"{agg} of {value}", **extra)
-    st.dataframe(grouped.pivot_table(index=x, columns=colour, values=value) if colour else grouped.set_index(x))
+        y_label = f"normalized {agg} of {value}" if (norm and colour) else f"{agg} of {value}"
+        chart(data, x="x", y="v", color="c" if colour else None, x_label=x, y_label=y_label, **extra)
+    pivoted = grouped.pivot_table(index=x, columns=colour, values=value) if colour else grouped.set_index(x)
+    st.dataframe(pivoted)
+    if colour and pivoted.shape[1] >= 2 and len(pivoted) >= 3:
+        with st.expander(f"Correlation matrix of {colour} (across {x})"):
+            corr = pivoted.corr()
+            st.dataframe(corr.style.background_gradient(cmap="coolwarm", vmin=-1.0, vmax=1.0).format("{:.3f}", na_rep="-"))

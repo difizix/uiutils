@@ -10,7 +10,7 @@ from pathlib import Path
 
 # Caches, virtualenvs and editor scratch dirs. Matched on exact directory name, so "tmp-"
 # excludes a directory literally called `tmp-`, not every name starting with "tmp-".
-EXCLUDE_DIRS = frozenset({".git", ".venv", "__pycache__", ".deps", ".ruff_cache", ".antigravity", "tmp-"})
+EXCLUDE_DIRS = frozenset({".git", ".venv", "__pycache__", ".deps", "trash", ".ruff_cache", ".antigravity", "tmp-"})
 
 # Reports additionally skip `.agents`, which holds agent plans/rules rather than project docs.
 REPORT_EXCLUDE_DIRS = EXCLUDE_DIRS | {".agents"}
