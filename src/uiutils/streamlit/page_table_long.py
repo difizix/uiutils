@@ -138,7 +138,7 @@ def render_long_table(root: Path, get_files: Callable[[], list[str]], on_refresh
 
         r_col, r_num, r_den = st.columns(3)
         with r_col:
-            ratio_col = _pick("Ratio over", [None, *labels], "long_rcol", format_func=lambda c: c or "none")
+            ratio_col = _pick("Ratio in", [None, *labels], "long_rcol", format_func=lambda c: c or "none")
         if ratio_col:
             levels = _levels(df[ratio_col])
             with r_num:
@@ -151,7 +151,7 @@ def render_long_table(root: Path, get_files: Callable[[], list[str]], on_refresh
         df = _filters(df, labels)
         x_c, c_c, a_c = st.columns(3)
         with x_c:
-            x = _pick("x", labels, "long_x")
+            x = _pick("x", labels, "long_x", index=labels.index(df[labels].nunique().idxmax()))  # default: the level with most entries
         with c_c:
             colour = _pick("Colour", [None, *[c for c in labels if c != x]], "long_color",
                            format_func=lambda c: c or "none")
@@ -179,8 +179,12 @@ def render_long_table(root: Path, get_files: Callable[[], list[str]], on_refresh
             return
         chart = st.bar_chart if kind == "bar" else st.line_chart
         extra = {"stack": False, "sort": False} if kind == "bar" else {}
-        y_label = f"normalized {agg} of {value}" if (norm and colour) else f"{agg} of {value}"
-        chart(data, x="x", y="v", color="c" if colour else None, x_label=x, y_label=y_label, **extra)
+        averaged = [c for c in labels if c not in keys]
+        const = [c for c in averaged if (df[c] == df[c].iloc[0]).all()]  # one category left: named by its value
+        single = [str(df[c].iloc[0]) for c in const]  # "mean gradp over geo metric"
+        many = [c for c in averaged if c not in const]
+        y_label = " ".join([*(["normalized"] if norm and colour else []), agg, *single, *(["over", *many] if many else [])])
+        chart(data, x="x", y="v", color="c" if colour else None, x_label=x, y_label=y_label, height=600, **extra)  # streamlit's default is 300
     pivoted = grouped.pivot_table(index=x, columns=colour, values=value) if colour else grouped.set_index(x)
     st.dataframe(pivoted)
     if colour and pivoted.shape[1] >= 2 and len(pivoted) >= 3:
