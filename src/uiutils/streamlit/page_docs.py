@@ -23,6 +23,8 @@ from uiutils.streamlit.tree import render_tree
 from uiutils.textfilter import filter_by_search_query
 from uiutils.tree import build_tree
 
+_NUM_RECENT = 30
+
 _MERMAID_HTML = """<!DOCTYPE html>
 <html>
 <head>
@@ -94,6 +96,11 @@ def render_markdown(md: str, md_dir: Path, root: Path, pages: dict):
             _render_mermaid(val)
 
 
+def _open_recent():
+    st.query_params["doc"] = st.session_state.docrecent
+    st.session_state.docrecent = None
+
+
 def render_docs(root: Path, pages: dict, subdir: str | Sequence[str], default: str):
     """Tree of the markdown files under *root*/*subdir* and the selected one (`?doc=`, *default* if unset).
 
@@ -110,10 +117,17 @@ def render_docs(root: Path, pages: dict, subdir: str | Sequence[str], default: s
     col_ctrl, col_view = st.columns([1, 3])
     with col_ctrl:
         with st.container(horizontal=True, vertical_alignment="bottom"):
-            query = st.text_input("Filter (regex)", key="docq", bind="query-params")
+            query = st.text_input("Filter (regex)",
+                placeholder="Filter (regex) names...",
+                label_visibility="collapsed",
+                key="docq", bind="query-params")
             if st.button("🔄", help="Rescan the markdown files"):
                 del sstate.report_files
                 st.rerun()
+            # report_files is newest first; on_change (not a post-check) so a later tree click isn't overridden
+        st.selectbox("📒", sstate.report_files[:_NUM_RECENT], index=None, placeholder="📒 Recent edits", key="docrecent",
+                        label_visibility="collapsed", help="Most recently modified docs, newest first",
+                        on_change=_open_recent)
         files, bad_regex = filter_by_search_query(sstate.report_files, query)
         if bad_regex:
             st.error("Invalid regex")
