@@ -1,6 +1,7 @@
 import base64
 
 from uiutils.mdrender import (
+    gui_href,
     resolve_markdown_images,
     resolve_markdown_links,
     split_mermaid_blocks,
@@ -58,6 +59,12 @@ def test_split_trailing_links_only_from_items_ending_in_links(tmp_path):
     assert split_trailing_links("[p](p.md),", tmp_path, tmp_path) == ("", [("p", "docs?doc=p.md")])
     for kept in ("see [p](p.md) here", "text ending [p](p.md)", "| a | [p](p.md) |", "- web [w](https://x.y)"):
         assert split_trailing_links(kept, tmp_path, tmp_path) == (kept, [])
+
+
+def test_gui_href_strips_local_origin_only(tmp_path):
+    assert gui_href("http://localhost:8501/metrics?a=1&b=2", tmp_path, tmp_path) == "metrics?a=1&b=2"
+    assert gui_href("https://127.0.0.1/logs?x=1", tmp_path, tmp_path) == "logs?x=1"
+    assert gui_href("http://example.com/metrics?a=1", tmp_path, tmp_path) is None
 
 
 def test_split_mermaid_blocks_preserves_order():

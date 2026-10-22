@@ -16,7 +16,8 @@ from urllib.parse import quote
 _IMAGE_RE = re.compile(r"!\[(.*?)\]\((.*?)\)")
 LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)\s]+)\)")  # not images
 _LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s")
-_LINK_SEPARATORS = " \t,;."
+_LOCAL_ORIGIN_RE = re.compile(r"^https?://(?:localhost|127\.0\.0\.1)(?::\d+)?/")
+_LINK_SEPARATORS =" \t,;."
 _MERMAID_RE = re.compile(r"```mermaid\s*\n(.*?)\n```", re.DOTALL)
 
 
@@ -66,9 +67,11 @@ def gui_href(href: str, base_dir: Path, root: Path) -> str | None:
 
     A relative `.md` link is resolved against *base_dir* and becomes `docs?doc=<path relative to
     root>`, the docs page's bound query parameter. A link that already is a GUI route (contains
-    `?`, e.g. `logs?log=runs/log.run_x`) is returned as is. External links, anchors and links that
+    `?`, e.g. `logs?log=runs/log.run_x`) is returned as is, after dropping a `http://localhost[:port]/`
+    (or 127.0.0.1) origin so that a URL pasted from the browser works. Other external links, anchors and links that
     don't resolve to a markdown file under *root* give None.
     """
+    href = _LOCAL_ORIGIN_RE.sub("", href)  # a pasted browser URL: the route is what counts
     if href.startswith(("http://", "https://", "mailto:", "#")):
         return None
     if "?" in href:

@@ -105,6 +105,7 @@ def render_docs(root: Path, pages: dict, subdir: str | Sequence[str], default: s
     if "report_files" not in sstate:
         sstate.report_files = [f"{d}/{f}" for d in subdirs for f in find_reports(Path(root) / d)]
     selected = st.query_params.get("doc", default)
+    st.query_params["doc"] = selected  # keep the URL in step with the shown doc (Home is the default page)
 
     col_ctrl, col_view = st.columns([1, 3])
     with col_ctrl:
