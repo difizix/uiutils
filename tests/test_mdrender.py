@@ -57,6 +57,8 @@ def test_split_trailing_links_only_from_items_ending_in_links(tmp_path):
     assert split_trailing_links("- run [log](logs?log=a), [p](p.md)", tmp_path, tmp_path) == (
         "- run", [("log", "logs?log=a"), ("p", "docs?doc=p.md")])
     assert split_trailing_links("[p](p.md),", tmp_path, tmp_path) == ("", [("p", "docs?doc=p.md")])
+    assert split_trailing_links("hwNaga: [p](p.md) [log](logs?log=a)", tmp_path, tmp_path) == (
+        "hwNaga:", [("p", "docs?doc=p.md"), ("log", "logs?log=a")])
     for kept in ("see [p](p.md) here", "text ending [p](p.md)", "| a | [p](p.md) |", "- web [w](https://x.y)"):
         assert split_trailing_links(kept, tmp_path, tmp_path) == (kept, [])
 

@@ -84,7 +84,7 @@ def gui_href(href: str, base_dir: Path, root: Path) -> str | None:
 
 
 def split_trailing_links(line: str, base_dir: Path, root: Path) -> tuple[str, list[tuple[str, str]]]:
-    """Split a list item, or a line of only links, into its text and its trailing in-app links.
+    """Split a list item, a `label: links` line, or a line of only links, into its text and its trailing in-app links.
 
     Trailing links are links to in-app routes (see `gui_href`) at the end of the line, separated only
     by spaces, commas, semicolons or periods; they come back as `(label, route)`. Any other line (prose,
@@ -100,7 +100,7 @@ def split_trailing_links(line: str, base_dir: Path, root: Path) -> tuple[str, li
         links.append((m.group(1), route))
         end = m.start()
     text = line[:end].rstrip(_LINK_SEPARATORS)
-    if not links or not (_LIST_ITEM_RE.match(line) or not text.strip()):
+    if not links or not (_LIST_ITEM_RE.match(line) or not text.strip() or text.endswith(":")):
         return line, []
     return text, links[::-1]
 

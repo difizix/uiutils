@@ -54,14 +54,14 @@ def _render_mermaid(code: str):
     components.html(_MERMAID_HTML.format(code=code), height=height, scrolling=True)
 
 
-def _render_prose(lines: list[str], md_dir: Path, root: Path):
+def _render_prose(lines: list[str], md_dir: Path, root: Path, width="auto"):
     if lines:
-        st.markdown(resolve_markdown_links("\n".join(lines), md_dir, root), unsafe_allow_html=True)
+        st.markdown(resolve_markdown_links("\n".join(lines), md_dir, root), unsafe_allow_html=True, width=width)
 
 
 def _render_with_page_links(md: str, md_dir: Path, root: Path, pages: dict):
     """Markdown whose list items' trailing GUI links (see `split_trailing_links`) are rendered as
-    `st.page_link` buttons, which switch page in place. Other links become same-tab `<a>` tags,
+    `st.page_link` buttons in one row after the item text (content-sized), which switch page in place. Other links become same-tab `<a>` tags,
     which reload the app."""
     prose: list[str] = []
     in_fence = False
@@ -74,9 +74,9 @@ def _render_with_page_links(md: str, md_dir: Path, root: Path, pages: dict):
             continue
         _render_prose(prose, md_dir, root)
         prose = []
-        if text.strip(" -*+"):
-            _render_prose([text.lstrip()], md_dir, root)  # lstrip: an indented line alone is a code block
-        with st.container(horizontal=True):
+        with st.container(horizontal=True, vertical_alignment="center"):
+            if text.strip(" -*+"):
+                _render_prose([text.lstrip()], md_dir, root, width="content")  # lstrip: an indented line alone is a code block
             for label, route in links:
                 page, _, query = route.partition("?")
                 if page in pages:
