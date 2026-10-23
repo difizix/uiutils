@@ -10,6 +10,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from uiutils.streamlit.widgets import filtered_select, line_filter, log_png_grid
 from uiutils.textfilter import filter_lines
@@ -36,6 +37,29 @@ def render_plots(root: Path, get_files: Callable[[], list[str]], on_refresh: Cal
         st.write(f"#### `{selected}`")
         with contextlib.suppress(OSError):
             st.caption(file_meta(path))
+
+
+def _scroll_to_bottom(label: str, key: str):
+    """Keep the text area labelled *label* scrolled to its end (a rerun resets it to the top; CSS
+    `column-reverse` can't reverse a textarea), unless the user scrolled up since; a new *key* (the shown file) re-sticks it.
+    Runs in the same-origin component iframe; retries a few times as the text area may not be in the DOM yet."""
+    components.html(f"""<script>
+    let n = 0;
+    const t = setInterval(() => {{
+        const a = window.parent.document.querySelector('textarea[aria-label="{label}"]');
+        if (a) {{
+            if (a.dataset.key !== {key!r}) {{ a.dataset.key = {key!r}; a.dataset.stick = "1"; }}
+            if (!a.dataset.hooked) {{
+                a.dataset.hooked = "1";
+                a.addEventListener("scroll", () => {{
+                    a.dataset.stick = a.scrollTop + a.clientHeight >= a.scrollHeight - 5 ? "1" : "";
+                }});
+            }}
+            if (a.dataset.stick) a.scrollTop = a.scrollHeight;
+        }}
+        if (a || ++n > 20) clearInterval(t);
+    }}, 100);
+    </script>""", height=0)
 
 
 def render_logs(root: Path, get_files: Callable[[], list[str]], on_refresh: Callable[[], None],
@@ -69,6 +93,7 @@ def render_logs(root: Path, get_files: Callable[[], list[str]], on_refresh: Call
             text = "\n".join(lines)
         st.caption(meta)
         st.text_area("File Contents", value=text, height=600)
+        _scroll_to_bottom("File Contents", selected)
     log_png_grid(path, root, key="log")
     return path
 
