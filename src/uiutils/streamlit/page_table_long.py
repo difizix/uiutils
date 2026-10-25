@@ -5,10 +5,12 @@ Reads a `.parquet` already in that form (e.g. `geo, tag, batch, field, metric, v
 label; the rows left in each (x, colour) group after the filters are aggregated into one value.
 An aggregate `centre-err` (`mean-std`, `median-range`) also draws error bars around the centre.
 A ratio adds, per label combination, the value under one level of a column over another's
-(e.g. tag `LoadNN/NoNNet`), as a new level of that column.
+(e.g. tag `LoadNN/NoNNet`), as a new level of that column. A split adds new label columns holding
+what a regex's groups capture in a column (e.g. `(\\d+)Infr` on a run name gives the seed).
 """
 
 import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -24,6 +26,7 @@ from uiutils.streamlit.widgets import filtered_select
 from uiutils.textfilter import filter_by_search_query
 
 AGGS = ["mean", "median", "min", "max", "std", "count", "mean-std", "median-range"]
+NO_MATCH = "not-matched"
 REGEX_SHOW = 8  # matched levels listed under the regex filter
 REGEX_HELP = """Python regex over the chosen column's levels, searched anywhere in the name, ignoring case.
 
@@ -31,6 +34,11 @@ REGEX_HELP = """Python regex over the chosen column's levels, searched anywhere 
 - `|` is OR: `^spe10|synthgeo1$`; a space is AND: `spe10 y90`.
 - Exclude with a lookahead: `^(?!HiRes)` keeps every level not starting with HiRes.
 - Numbers are matched as text: `^1.$` is batches 10 to 19.
+"""
+SPLIT_HELP = r"""Python regex searched in the chosen column's levels, ignoring case; each capture group becomes a new label column.
+
+- `(\d+)Infr` on `2Infr_run` gives column `<col>_rx1` = `2`; name it with `(?P<seed>\d+)Infr`.
+- Levels that do not match (or leave a group unset) get the entry `not-matched`, so they can be picked or filtered.
 """
 
 
@@ -75,6 +83,26 @@ def aggregate(df: pd.DataFrame, keys: list[str], value: str, spec: str) -> pd.Da
     return out
 
 
+def add_split(df: pd.DataFrame, col: str, pattern: str) -> pd.DataFrame:
+    """*df* plus one label column per capture group of *pattern* searched in `df[col]` (ignoring case):
+    named by the group (`(?P<seed>\\d+)`), else `col_rx1`, `col_rx2`, ...; no group gives the whole
+    match as `col_rx`. Rows that do not match, or leave a group unset, get `NO_MATCH`.
+    Raises `re.error` for an invalid pattern and `ValueError` for a name already a column."""
+    rx = re.compile(pattern, re.IGNORECASE)
+    by_index = {i: n for n, i in rx.groupindex.items()}
+    names = [by_index.get(k, f"{col}_rx{k}") for k in range(1, rx.groups + 1)] or [f"{col}_rx"]
+    if clash := [n for n in names if n in df.columns]:
+        raise ValueError(f"column {clash} exists")
+    levels = {lv: rx.search(str(lv)) for lv in df[col].unique()}
+
+    def captured(m, k):
+        got = m.group(k) if m else None
+        return NO_MATCH if got is None else got
+
+    return df.assign(**{n: df[col].map({lv: captured(m, k + 1 if rx.groups else 0) for lv, m in levels.items()})
+                        for k, n in enumerate(names)})
+
+
 def normalize_by_colour(grouped: pd.DataFrame, colour_col: str, val_col: str, also: tuple[str, ...] = ()) -> pd.DataFrame:
     """Divide *val_col* (and the *also* columns, e.g. error bounds) by each *colour_col*'s maximum
     of *val_col* so each series peaks at 1.0."""
@@ -109,6 +137,25 @@ def _filters(df: pd.DataFrame, labels: list[str]) -> pd.DataFrame:
             if picked:
                 df = df[df[c].isin(picked)]
         return _regex_filter(df, labels)
+
+
+def _split(df: pd.DataFrame, labels: list[str]) -> tuple[pd.DataFrame, list[str]]:
+    """"Split in" a label column by a regex into new label columns (see `add_split`); URL-bound as
+    `?long_sp_col=` and `?long_sp=`."""
+    col_c, rx_c = st.columns([1, 2])
+    with col_c:
+        col = _pick("Split in", [None, *labels], "long_sp_col", format_func=lambda c: c or "none")
+    with rx_c:
+        _drop_stale("long_sp", lambda v: isinstance(v, str))
+        pattern = st.text_input("Split regex", key="long_sp", bind="query-params", help=SPLIT_HELP, disabled=not col)
+    if not col or not pattern.strip():
+        return df, labels
+    try:
+        out = add_split(df, col, pattern)
+    except (re.error, ValueError) as e:
+        st.caption(f"⚠️ split not applied: {e}")
+        return df, labels
+    return out, [*labels, *[c for c in out.columns if c not in df.columns]]
 
 
 def _regex_filter(df: pd.DataFrame, labels: list[str]) -> pd.DataFrame:
@@ -179,6 +226,7 @@ def render_long_table(root: Path, get_files: Callable[[], list[str]], on_refresh
             if num != den:
                 df = add_ratio(df, ratio_col, num, den, value)
 
+        df, labels = _split(df, labels)
         df = _filters(df, labels)
         x_c, c_c, a_c = st.columns(3)
         with x_c:

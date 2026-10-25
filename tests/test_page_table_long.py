@@ -1,6 +1,6 @@
 import pandas as pd
 from uiutils.json_table import json_long
-from uiutils.streamlit.page_table_long import add_ratio, aggregate, normalize_by_colour
+from uiutils.streamlit.page_table_long import add_ratio, add_split, aggregate, normalize_by_colour
 
 
 def test_json_long_keeps_numeric_leaves_with_their_paths():
@@ -50,3 +50,11 @@ def test_normalize_scales_error_bounds_with_the_centre():
     res = normalize_by_colour(df, "c", "v", ("lo", "hi"))
     assert res["lo"].tolist() == [0.25, 0.5]
     assert res["hi"].tolist() == [0.75, 2.0]
+
+
+def test_add_split_names_groups_and_marks_non_matches():
+    df = pd.DataFrame({"run": ["0Infr_a", "12infr_b", "multiB"], "value": [1.0, 2.0, 3.0]})
+    assert add_split(df, "run", r"(\d+)Infr")["run_rx1"].tolist() == ["0", "12", "not-matched"]
+    named = add_split(df, "run", r"(?P<seed>\d+)Infr(_(?P<tail>\w))?")
+    assert named[["seed", "tail"]].to_numpy().tolist() == [["0", "a"], ["12", "b"], ["not-matched"] * 2]
+    assert add_split(df, "run", "Infr")["run_rx"].tolist() == ["Infr", "infr", "not-matched"]
