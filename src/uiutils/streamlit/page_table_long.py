@@ -179,17 +179,27 @@ def _regex_filter(df: pd.DataFrame, labels: list[str]) -> pd.DataFrame:
     return df[df[col].isin(matched)]
 
 
-def _with_error_bars(data: pd.DataFrame, kind: str, x_label: str, y_label: str, coloured: bool):
-    """The bar/line chart of `x`, `v` (colour `c`) with a `lo`-`hi` rule per point, in x's data order."""
-    enc = {"x": alt.X("x:N", sort=None, title=x_label), "y": alt.Y("v:Q", title=y_label)}
+def _chart(data: pd.DataFrame, kind: str, x_label: str, y_label: str, coloured: bool):
+    """The bar/line chart of `x`, `v` (colour `c`) in x's data order, with a `lo`-`hi` whisker per point if given."""
+    # side by side only if an x holds several colours; a colour derived from x (one per x) would
+    # otherwise leave an empty slot per other colour at every x
+    grouped = coloured and kind == "bar" and data.groupby("x")["c"].nunique().max() > 1
+    # a wider gap between groups, whose bars touch
+    x = alt.X("x:N", sort=None, title=x_label, scale=alt.Scale(paddingInner=0.3) if grouped else alt.Undefined)
+    enc = {"x": x, "y": alt.Y("v:Q", title=y_label)}
     if coloured:
         enc["color"] = alt.Color("c:N")
-    shift = {"xOffset": alt.XOffset("c:N")} if coloured and kind == "bar" else {}
+    shift = {"xOffset": alt.XOffset("c:N")} if grouped else {}
     base = alt.Chart(data)
-    centre = base.mark_bar() if kind == "bar" else base.mark_line(point=True)
+    # streamlit's theme sizes a bar to 0.85 of its band; a full band makes a coloured group's bars touch
+    bar = base.mark_bar(width=alt.RelativeBandSize(1)) if grouped else base.mark_bar()
+    centre = (bar if kind == "bar" else base.mark_line(point=True)).encode(**enc, **shift)
+    if "lo" not in data:
+        return centre.properties(height=600)
+    # a sized bar, not mark_rule: a rule sits at the band's start, so it drifts left of an xOffset bar;
     # mid grey: visible on dark and light themes
-    rule = base.mark_rule(color="#a0a0a0", strokeWidth=2).encode(x=enc["x"], y="lo:Q", y2="hi:Q", **shift)
-    return alt.layer(centre.encode(**enc, **shift), rule).properties(height=600)
+    whisker = base.mark_bar(size=2, color="#a0a0a0").encode(x=x, y="lo:Q", y2="hi:Q", **shift)
+    return alt.layer(centre, whisker).properties(height=600)
 
 
 def render_long_table(root: Path, get_files: Callable[[], list[str]], on_refresh: Callable[[], None]):
@@ -262,10 +272,8 @@ def render_long_table(root: Path, get_files: Callable[[], list[str]], on_refresh
         single = [str(df[c].iloc[0]) for c in const]  # "mean gradp over geo metric"
         many = [c for c in averaged if c not in const]
         y_label = " ".join([*(["normalized"] if norm and colour else []), agg, *single, *(["over", *many] if many else [])])
-        if bars:
-            st.altair_chart(_with_error_bars(data, kind, x, y_label, bool(colour)), width="stretch")
-        elif kind == "bar":
-            st.bar_chart(data, x="x", y="v", color="c" if colour else None, x_label=x, y_label=y_label, height=600, stack=False, sort=False)  # streamlit's default height is 300
+        if kind == "bar" or bars:
+            st.altair_chart(_chart(data, kind, x, y_label, bool(colour)), width="stretch")
         else:
             st.line_chart(data, x="x", y="v", color="c" if colour else None, x_label=x, y_label=y_label, height=600)
     pivoted = grouped.pivot_table(index=x, columns=colour, values=value) if colour else grouped.set_index(x)[[value]]
