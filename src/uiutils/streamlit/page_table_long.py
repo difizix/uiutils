@@ -3,6 +3,7 @@
 Reads a `.parquet` already in that form (e.g. `geo, tag, batch, field, metric, value`), or a
 `.json` turned into it by `json_long` (`level0, level1, ..., value`). Pick an x label and a colour
 label; the rows left in each (x, colour) group after the filters are aggregated into one value.
+An aggregate `centre-err` (`mean-std`, `median-range`) also draws error bars around the centre.
 A ratio adds, per label combination, the value under one level of a column over another's
 (e.g. tag `LoadNN/NoNNet`), as a new level of that column.
 """
@@ -11,6 +12,7 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
+import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -21,7 +23,7 @@ from uiutils.streamlit.slice_view import _drop_stale
 from uiutils.streamlit.widgets import filtered_select
 from uiutils.textfilter import filter_by_search_query
 
-AGGS = ["mean", "median", "min", "max", "std", "count"]
+AGGS = ["mean", "median", "min", "max", "std", "count", "mean-std", "median-range"]
 REGEX_SHOW = 8  # matched levels listed under the regex filter
 REGEX_HELP = """Python regex over the chosen column's levels, searched anywhere in the name, ignoring case.
 
@@ -59,12 +61,28 @@ def add_ratio(df: pd.DataFrame, col: str, num, den, value: str = "value") -> pd.
     return pd.concat([df, ratio[df.columns]], ignore_index=True)
 
 
-def normalize_by_colour(grouped: pd.DataFrame, colour_col: str, val_col: str) -> pd.DataFrame:
-    """Divide *val_col* by each *colour_col*'s maximum so each series peaks at 1.0."""
+def aggregate(df: pd.DataFrame, keys: list[str], value: str, spec: str) -> pd.DataFrame:
+    """One row per *keys* group: *value* aggregated by *spec* (`mean`, ..., or `centre-err`).
+    `-std` adds `lo`/`hi` = centre -/+ std (0 for a single row); `-range` adds the group min/max."""
+    agg, _, err = spec.partition("-")
+    grouped = df.groupby(keys, dropna=False)[value]
+    out = grouped.agg(agg).reset_index()
+    if err == "std":
+        spread = grouped.std().fillna(0.0).to_numpy()
+        out["lo"], out["hi"] = out[value] - spread, out[value] + spread
+    elif err == "range":
+        out["lo"], out["hi"] = grouped.min().to_numpy(), grouped.max().to_numpy()
+    return out
+
+
+def normalize_by_colour(grouped: pd.DataFrame, colour_col: str, val_col: str, also: tuple[str, ...] = ()) -> pd.DataFrame:
+    """Divide *val_col* (and the *also* columns, e.g. error bounds) by each *colour_col*'s maximum
+    of *val_col* so each series peaks at 1.0."""
     grouped = grouped.copy()
     maxes = grouped.groupby(colour_col, dropna=False)[val_col].transform("max")
     nonzero = maxes.replace(0, np.nan)
-    grouped[val_col] = (grouped[val_col] / nonzero).fillna(grouped[val_col])
+    for c in (val_col, *also):
+        grouped[c] = (grouped[c] / nonzero).fillna(grouped[c])
     return grouped
 
 
@@ -112,6 +130,19 @@ def _regex_filter(df: pd.DataFrame, labels: list[str]) -> pd.DataFrame:
     more = f", ... (+{len(matched) - REGEX_SHOW})" if len(matched) > REGEX_SHOW else ""
     st.caption(f"{len(matched)} of {len(levels)}: {', '.join(map(str, matched[:REGEX_SHOW]))}{more}")
     return df[df[col].isin(matched)]
+
+
+def _with_error_bars(data: pd.DataFrame, kind: str, x_label: str, y_label: str, coloured: bool):
+    """The bar/line chart of `x`, `v` (colour `c`) with a `lo`-`hi` rule per point, in x's data order."""
+    enc = {"x": alt.X("x:N", sort=None, title=x_label), "y": alt.Y("v:Q", title=y_label)}
+    if coloured:
+        enc["color"] = alt.Color("c:N")
+    shift = {"xOffset": alt.XOffset("c:N")} if coloured and kind == "bar" else {}
+    base = alt.Chart(data)
+    centre = base.mark_bar() if kind == "bar" else base.mark_line(point=True)
+    # mid grey: visible on dark and light themes
+    rule = base.mark_rule(color="#a0a0a0", strokeWidth=2).encode(x=enc["x"], y="lo:Q", y2="hi:Q", **shift)
+    return alt.layer(centre.encode(**enc, **shift), rule).properties(height=600)
 
 
 def render_long_table(root: Path, get_files: Callable[[], list[str]], on_refresh: Callable[[], None]):
@@ -166,26 +197,30 @@ def render_long_table(root: Path, get_files: Callable[[], list[str]], on_refresh
         st.caption(f"{len(df)} rows after filters")
 
     keys = [x, colour] if colour else [x]
-    grouped = df.groupby(keys, dropna=False)[value].agg(agg).reset_index()
+    grouped = aggregate(df, keys, value, agg)
+    bars = [c for c in ("lo", "hi") if c in grouped]
     if norm and colour:
-        grouped = normalize_by_colour(grouped, colour, value)
+        grouped = normalize_by_colour(grouped, colour, value, tuple(bars))
     # columns renamed: Vega-Lite misreads "/" and "." in field names
-    data = pd.DataFrame({"x": grouped[x].astype(str), "v": grouped[value]})
+    data = pd.DataFrame({"x": grouped[x].astype(str), "v": grouped[value], **{c: grouped[c] for c in bars}})
     if colour:
         data["c"] = grouped[colour].astype(str)
     with col_view:
         if data.empty:
             st.info("No rows match the filters.")
             return
-        chart = st.bar_chart if kind == "bar" else st.line_chart
-        extra = {"stack": False, "sort": False} if kind == "bar" else {}
         averaged = [c for c in labels if c not in keys]
         const = [c for c in averaged if (df[c] == df[c].iloc[0]).all()]  # one category left: named by its value
         single = [str(df[c].iloc[0]) for c in const]  # "mean gradp over geo metric"
         many = [c for c in averaged if c not in const]
         y_label = " ".join([*(["normalized"] if norm and colour else []), agg, *single, *(["over", *many] if many else [])])
-        chart(data, x="x", y="v", color="c" if colour else None, x_label=x, y_label=y_label, height=600, **extra)  # streamlit's default is 300
-    pivoted = grouped.pivot_table(index=x, columns=colour, values=value) if colour else grouped.set_index(x)
+        if bars:
+            st.altair_chart(_with_error_bars(data, kind, x, y_label, bool(colour)), width="stretch")
+        elif kind == "bar":
+            st.bar_chart(data, x="x", y="v", color="c" if colour else None, x_label=x, y_label=y_label, height=600, stack=False, sort=False)  # streamlit's default height is 300
+        else:
+            st.line_chart(data, x="x", y="v", color="c" if colour else None, x_label=x, y_label=y_label, height=600)
+    pivoted = grouped.pivot_table(index=x, columns=colour, values=value) if colour else grouped.set_index(x)[[value]]
     st.dataframe(pivoted)
     if colour and pivoted.shape[1] >= 2 and len(pivoted) >= 3:
         with st.expander(f"Correlation matrix of {colour} (across {x})"):

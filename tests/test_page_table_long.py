@@ -1,6 +1,6 @@
 import pandas as pd
 from uiutils.json_table import json_long
-from uiutils.streamlit.page_table_long import add_ratio, normalize_by_colour
+from uiutils.streamlit.page_table_long import add_ratio, aggregate, normalize_by_colour
 
 
 def test_json_long_keeps_numeric_leaves_with_their_paths():
@@ -30,3 +30,23 @@ def test_normalize_by_colour_peaks_at_one():
     # zero max remains 0.0 without crashing
     assert res.loc[res["c"] == "Z", "v"].tolist() == [0.0, 0.0]
 
+
+
+def test_aggregate_error_bounds():
+    df = pd.DataFrame({"x": ["a", "a", "a", "b"], "value": [1.0, 2.0, 6.0, 5.0]})
+    plain = aggregate(df, ["x"], "value", "mean")
+    assert list(plain.columns) == ["x", "value"]
+    rng = aggregate(df, ["x"], "value", "median-range")
+    assert rng[["value", "lo", "hi"]].to_dict("records") == [
+        {"value": 2.0, "lo": 1.0, "hi": 6.0}, {"value": 5.0, "lo": 5.0, "hi": 5.0}]
+    std = aggregate(df, ["x"], "value", "mean-std")
+    s = df.loc[df.x == "a", "value"].std()
+    assert std.loc[0, ["lo", "hi"]].tolist() == [3.0 - s, 3.0 + s]
+    assert std.loc[1, ["lo", "hi"]].tolist() == [5.0, 5.0]  # single row: no spread, not NaN
+
+
+def test_normalize_scales_error_bounds_with_the_centre():
+    df = pd.DataFrame({"c": ["A", "A"], "v": [2.0, 4.0], "lo": [1.0, 2.0], "hi": [3.0, 8.0]})
+    res = normalize_by_colour(df, "c", "v", ("lo", "hi"))
+    assert res["lo"].tolist() == [0.25, 0.5]
+    assert res["hi"].tolist() == [0.75, 2.0]
