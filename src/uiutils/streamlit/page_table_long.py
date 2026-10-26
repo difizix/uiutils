@@ -7,12 +7,14 @@ An aggregate `centre-err` (`mean-std`, `median-range`) also draws error bars aro
 A ratio adds, per label combination, the value under one level of a column over another's
 (e.g. tag `LoadNN/NoNNet`), as a new level of that column. A split adds new label columns holding
 what a regex's groups capture in a column (e.g. `(\\d+)Infr` on a run name gives the seed).
+Presets, named per file-name regex, set the controls from a URL query string when a file is picked.
 """
 
 import json
 import re
 from collections.abc import Callable
 from pathlib import Path
+from urllib.parse import parse_qs
 
 import altair as alt
 import numpy as np
@@ -27,6 +29,9 @@ from uiutils.textfilter import filter_by_search_query
 
 AGGS = ["mean", "median", "min", "max", "std", "count", "mean-std", "median-range"]
 NO_MATCH = "not-matched"
+# the URL-bound controls a preset sets; the `long_f_<col>` filters are matched by prefix
+CONTROLS = ("long_value", "long_rcol", "long_rnum", "long_rden", "long_sp_col", "long_sp", "long_rx_col", "long_rx",
+            "long_x", "long_color", "long_agg", "long_chart", "long_norm")
 REGEX_SHOW = 8  # matched levels listed under the regex filter
 REGEX_HELP = """Python regex over the chosen column's levels, searched anywhere in the name, ignoring case.
 
@@ -202,13 +207,61 @@ def _chart(data: pd.DataFrame, kind: str, x_label: str, y_label: str, coloured: 
     return alt.layer(centre, whisker).properties(height=600)
 
 
-def render_long_table(root: Path, get_files: Callable[[], list[str]], on_refresh: Callable[[], None]):
-    """*get_files()* gives `.parquet`/`.json` paths relative to *root*; the picks are URL-bound."""
+def parse_preset(query: str) -> dict:
+    """Control values from a metrics URL query (`long_color=field&long_f_tag=A%2FB...`): the
+    `long_f_*` filters as lists, `true`/`false` as bools; the file pick (`long`, `longq`) is dropped."""
+    out = {}
+    for k, vals in parse_qs(query.lstrip("?")).items():
+        if k in CONTROLS:
+            v = vals[-1]
+            out[k] = {"true": True, "false": False}.get(v.lower(), v)
+        elif k.startswith("long_f_"):
+            out[k] = vals
+    return out
+
+
+def _set_controls(values: dict):
+    for k in [k for k in st.session_state if k in CONTROLS or str(k).startswith("long_f_")]:
+        del st.session_state[k]
+    st.session_state.update(values)
+
+
+def _preset(selected: str, presets: dict[str, dict[str, str]]):
+    """"Select preset" over the named presets of every file regex that *selected* matches; switching
+    file applies the first one, unless a pasted URL (first run) already sets the controls."""
+    named = {n: q for rx, group in presets.items() if re.search(rx, selected) for n, q in group.items()}
+    if not named:
+        return
+    names = [None, *named]
+    _drop_stale("long_preset", lambda v: v in names)
+    if st.session_state.get("long_preset_for") != selected:
+        first_run = "long_preset_for" not in st.session_state
+        st.session_state.long_preset_for = selected
+        url_set = any(k in CONTROLS or k.startswith("long_f_") for k in st.query_params)
+        if not (first_run and url_set):
+            if not (first_run and st.session_state.get("long_preset")):  # else: the URL's ?long_preset=
+                st.session_state.long_preset = names[1]
+            _set_controls(parse_preset(named[st.session_state.long_preset]))
+
+    def apply():
+        if st.session_state.long_preset:
+            _set_controls(parse_preset(named[st.session_state.long_preset]))
+
+    st.selectbox("Select preset", names, key="long_preset", bind="query-params", on_change=apply,
+                 format_func=lambda n: n or "none", help="Sets the controls below; they can be changed after")
+
+
+def render_long_table(root: Path, get_files: Callable[[], list[str]], on_refresh: Callable[[], None],
+                      presets: dict[str, dict[str, str]] | None = None):
+    """*get_files()* gives `.parquet`/`.json` paths relative to *root*; the picks are URL-bound.
+    *presets*: file-path regex -> {preset name: metrics URL query}, see `parse_preset`."""
     col_ctrl, col_view = st.columns([2, 3])
     with col_ctrl:
         selected = filtered_select("long", "table", get_files(), on_refresh, icon="📈")
         if not selected:
             return
+        if presets:
+            _preset(selected, presets)
         path = Path(root) / selected
         try:
             st.caption(file_meta(path))
