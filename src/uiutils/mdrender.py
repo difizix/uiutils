@@ -67,7 +67,7 @@ def gui_href(href: str, base_dir: Path, root: Path) -> str | None:
 
     A relative `.md` link is resolved against *base_dir* and becomes `docs?doc=<path relative to
     root>`, the docs page's bound query parameter. A link that already is a GUI route (contains
-    `?`, e.g. `logs?log=runs/log.run_x`) is returned as is, after dropping a `http://localhost[:port]/`
+    `?`, e.g. `logs?log=runs/log.run_x`) is returned as is, after dropping a leading `/` or a `http://localhost[:port]/`
     (or 127.0.0.1) origin so that a URL pasted from the browser works. Other external links, anchors and links that
     don't resolve to a markdown file under *root* give None.
     """
@@ -75,7 +75,7 @@ def gui_href(href: str, base_dir: Path, root: Path) -> str | None:
     if href.startswith(("http://", "https://", "mailto:", "#")):
         return None
     if "?" in href:
-        return href
+        return href.lstrip("/")  # `/studio?f=x` is the same route as `studio?f=x`
     root = Path(root).resolve()
     path = (Path(base_dir) / href.split("#", maxsplit=1)[0]).resolve()
     if path.suffix != ".md" or not path.is_file() or not path.is_relative_to(root):
@@ -103,6 +103,54 @@ def split_trailing_links(line: str, base_dir: Path, root: Path) -> tuple[str, li
     if not links or not (_LIST_ITEM_RE.match(line) or not text.strip() or text.endswith(":")):
         return line, []
     return text, links[::-1]
+
+
+def is_table_separator(line: str) -> bool:
+    """Whether *line* is a table's header separator row, e.g. `|---|:--:|`."""
+    return "|" in line and "-" in line and re.fullmatch(r"[\s|:-]+", line) is not None
+
+
+def split_table_row(line: str) -> list[str]:
+    """The stripped cells of a markdown table row; a `|` escaped (`\\|`) or inside backticks is cell text."""
+    cells, cell, in_code, i = [], "", False, 0
+    while i < len(line):
+        c = line[i]
+        if c == "\\" and line[i + 1:i + 2] == "|":
+            cell += "\\|"
+            i += 2
+            continue
+        if c == "`":
+            in_code = not in_code
+        if c == "|" and not in_code:
+            cells.append(cell.strip())
+            cell = ""
+        else:
+            cell += c
+        i += 1
+    cells.append(cell.strip())
+    if line.strip().startswith("|"):
+        cells = cells[1:]
+    if line.strip().endswith("|") and cells:
+        cells = cells[:-1]
+    return cells
+
+
+def split_cell_links(cell: str, base_dir: Path, root: Path) -> list[tuple[str, str | None]]:
+    """A table cell as ordered segments: `(label, route)` per in-app link (see `gui_href`), `(text, None)`
+    for the markdown between them; text that is only separators (`, ` between links) is dropped."""
+    segments: list[tuple[str, str | None]] = []
+    start = 0
+    for m in LINK_RE.finditer(cell):
+        route = gui_href(m.group(2), base_dir, root)
+        if route is None:
+            continue
+        if cell[start:m.start()].strip(_LINK_SEPARATORS):
+            segments.append((cell[start:m.start()].strip(), None))
+        segments.append((m.group(1), route))
+        start = m.end()
+    if cell[start:].strip(_LINK_SEPARATORS) or not segments:
+        segments.append((cell[start:].strip(), None))
+    return segments
 
 
 def resolve_markdown_links(md_content: str, base_dir: Path, root: Path) -> str:
